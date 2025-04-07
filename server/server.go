@@ -1,13 +1,14 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"pull-request-notificator/notifier"
-	"strings"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,119 +33,126 @@ type Review struct {
 var username_mapper map[string]string = nil
 
 func Run(notifier *notifier.Notifier) error {
-	http.HandleFunc("POST /opened", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/opened", func(w http.ResponseWriter, r *http.Request) {
 		var payload PullRequest
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			log.Println("Ошибка отправки уведомления о новом pull request: некорректные параметры запроса")
+			http.Error(w, "Invalid request parameters", http.StatusBadRequest)
 			return
 		}
 
-		message := fmt.Sprintf(
-			"*🚀 Новый PR от* %s\n\n%s",
-			usernameAsLink(resolveUsername(payload.Author)),
-			pullRequestLink(payload.Title, payload.URL),
-		)
+		// Запускаем горутину для уведомления
+		go func() {
+			message := fmt.Sprintf(
+				"*🚀 Новый PR от* %s\n\n%s",
+				usernameAsLink(resolveUsername(payload.Author)),
+				pullRequestLink(payload.Title, payload.URL),
+			)
 
-		if err := notifier.Send(r.Context(), message); err != nil {
-			http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о новом pull request: %v", err), http.StatusInternalServerError)
-		}
+			if err := notifier.Send(context.Background(), message); err != nil {
+				log.Printf("Ошибка отправки уведомления о новом pull request: %s", err)
+			}
+		}()
+
+		w.WriteHeader(http.StatusOK)
 	})
 
 	http.HandleFunc("POST /request-review", func(w http.ResponseWriter, r *http.Request) {
 		var payload RequestReviewer
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Ошибка разбора JSON", http.StatusBadRequest)
+			log.Println("Ошибка отправки уведомления о запросе на review: некорректные параметры запроса")
+			http.Error(w, "Invalid request parameters", http.StatusBadRequest)
 			return
 		}
 
-		message := fmt.Sprintf(
-			"*👀 @%s, тебя приглашают на ревью*\n\n%s (by %s)",
-			resolveUsername(payload.Reviewer),
-			pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
-			usernameAsLink(resolveUsername(payload.PullRequest.Author)),
-		)
+		go func() {
+			message := fmt.Sprintf(
+				"*👀 @%s, тебя приглашают на ревью*\n\n%s (by %s)",
+				resolveUsername(payload.Reviewer),
+				pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
+				usernameAsLink(resolveUsername(payload.PullRequest.Author)),
+			)
 
-		if err := notifier.Send(r.Context(), message); err != nil {
-			http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о запросе на review: %v", err), http.StatusInternalServerError)
-		}
-	})
+			if err := notifier.Send(context.Background(), message); err != nil {
+				log.Printf("Ошибка отправки уведомления о запросе на review: %s", err)
+			}
+		}()
 
-	http.HandleFunc("POST /re-request-review", func(w http.ResponseWriter, r *http.Request) {
-		var payload RequestReviewer
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Ошибка разбора JSON", http.StatusBadRequest)
-			return
-		}
-
-		message := fmt.Sprintf(
-			"*👀 @%s, тебя приглашают на ре-ревью*\n\n%s (by %s)",
-			resolveUsername(payload.Reviewer),
-			pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
-			usernameAsLink(resolveUsername(payload.PullRequest.Author)),
-		)
-
-		if err := notifier.Send(r.Context(), message); err != nil {
-			http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о запросе на review: %v", err), http.StatusInternalServerError)
-		}
+		w.WriteHeader(http.StatusOK)
 	})
 
 	http.HandleFunc("POST /approve", func(w http.ResponseWriter, r *http.Request) {
 		var payload Review
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Ошибка разбора JSON", http.StatusBadRequest)
+			log.Println("Ошибка отправки уведомления о результате ревью (approve): некорректные параметры запроса")
+			http.Error(w, "Invalid request parameters", http.StatusBadRequest)
 			return
 		}
 
-		message := fmt.Sprintf(
-			"✅ *@%s, твои изменения одобрил* %s\n\n%s",
-			resolveUsername(payload.PullRequest.Author),
-			usernameAsLink(resolveUsername(payload.Reviewer)),
-			pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
-		)
-
-		if err := notifier.Send(r.Context(), message); err != nil {
-			http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о запросе на review: %v", err), http.StatusInternalServerError)
-		}
-	})
-
-	http.HandleFunc("POST /request-changes", func(w http.ResponseWriter, r *http.Request) {
-		var payload Review
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Ошибка разбора JSON", http.StatusBadRequest)
-			return
-		}
-
-		message := fmt.Sprintf(
-			"❌ *@%s, тебя просит внести изменения* %s\n\n%s",
-			resolveUsername(payload.PullRequest.Author),
-			usernameAsLink(resolveUsername(payload.Reviewer)),
-			pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
-		)
-
-		if err := notifier.Send(r.Context(), message); err != nil {
-			http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о запросе на review: %v", err), http.StatusInternalServerError)
-		}
-	})
-
-	http.HandleFunc("POST /comment", func(w http.ResponseWriter, r *http.Request) {
-		var payload Review
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Ошибка разбора JSON", http.StatusBadRequest)
-			return
-		}
-
-		if payload.PullRequest.Author != payload.Reviewer {
+		go func() {
 			message := fmt.Sprintf(
-				"*✍️ @%s, тебе оставил комментарий* %s\n\n%s",
+				"✅ *@%s, твои изменения одобрил* %s\n\n%s",
 				resolveUsername(payload.PullRequest.Author),
 				usernameAsLink(resolveUsername(payload.Reviewer)),
 				pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
 			)
 
-			if err := notifier.Send(r.Context(), message); err != nil {
-				http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о запросе на review: %v", err), http.StatusInternalServerError)
+			if err := notifier.Send(context.Background(), message); err != nil {
+				log.Printf("Ошибка отправки уведомления о результате ревью (approve): %v", err)
 			}
+		}()
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	http.HandleFunc("POST /request-changes", func(w http.ResponseWriter, r *http.Request) {
+		var payload Review
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			log.Println("Ошибка отправки уведомления о результате ревью (request-changes): некорректные параметры запроса")
+			http.Error(w, "Invalid request parameters", http.StatusBadRequest)
+			return
 		}
+
+		go func() {
+			message := fmt.Sprintf(
+				"❌ *@%s, тебя просит внести изменения* %s\n\n%s",
+				resolveUsername(payload.PullRequest.Author),
+				usernameAsLink(resolveUsername(payload.Reviewer)),
+				pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
+			)
+
+			if err := notifier.Send(context.Background(), message); err != nil {
+				http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о результате ревью (request-changes): %v", err), http.StatusInternalServerError)
+			}
+		}()
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	http.HandleFunc("POST /comment", func(w http.ResponseWriter, r *http.Request) {
+		var payload Review
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			log.Println("Ошибка отправки уведомления о результате ревью (comment): некорректные параметры запроса")
+			http.Error(w, "Invalid request parameters", http.StatusBadRequest)
+			return
+		}
+
+		if payload.PullRequest.Author != payload.Reviewer {
+			go func() {
+				message := fmt.Sprintf(
+					"*✍️ @%s, тебе оставил комментарий* %s\n\n%s",
+					resolveUsername(payload.PullRequest.Author),
+					usernameAsLink(resolveUsername(payload.Reviewer)),
+					pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
+				)
+
+				if err := notifier.Send(context.Background(), message); err != nil {
+					http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о результате ревью (comment): %v", err), http.StatusInternalServerError)
+				}
+			}()
+		}
+
+		w.WriteHeader(http.StatusOK)
 	})
 
 	log.Println("Сервер запущен на :8080")
@@ -156,7 +164,8 @@ func usernameAsLink(username string) string {
 }
 
 func pullRequestLink(title, url string) string {
-	cleanTitle := strings.Replace(title, "[DRAFT]", "DRAFT:", 1)
+	re := regexp.MustCompile(`(?i)\[draft\]`)
+	cleanTitle := re.ReplaceAllString(title, "DRAFT:")
 	return fmt.Sprintf("[%s](%s)", cleanTitle, url)
 }
 
