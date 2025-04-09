@@ -7,7 +7,7 @@ RUN go mod download
 COPY . .
 RUN go build -buildvcs=false -o main cmd/main.go
 
-EXPOSE 80
+EXPOSE 8080
 
 FROM mirror.gcr.io/alpine
 
