@@ -156,7 +156,7 @@ func Run(notifier *notifier.Notifier) error {
 	})
 
 	log.Println("Сервер запущен на :8080")
-	return http.ListenAndServe(":8080", nil)
+	return http.ListenAndServe("0.0.0.0:8080", nil)
 }
 
 func usernameAsLink(username string) string {
