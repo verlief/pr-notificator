@@ -91,7 +91,7 @@ func Run(notifier *notifier.Notifier) error {
 
 		go func() {
 			message := fmt.Sprintf(
-				"✅ *@%s, твои изменения одобрил* %s\n\n%s",
+				"✅ *@%s, твои изменения одобрил(а)* %s\n\n%s",
 				resolveUsername(payload.PullRequest.Author),
 				usernameAsLink(resolveUsername(payload.Reviewer)),
 				pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
@@ -140,7 +140,7 @@ func Run(notifier *notifier.Notifier) error {
 		if payload.PullRequest.Author != payload.Reviewer {
 			go func() {
 				message := fmt.Sprintf(
-					"*✍️ @%s, тебе оставил комментарий* %s\n\n%s",
+					"*✍️ @%s, тебе оставил(а) комментарий* %s\n\n%s",
 					resolveUsername(payload.PullRequest.Author),
 					usernameAsLink(resolveUsername(payload.Reviewer)),
 					pullRequestLink(payload.PullRequest.Title, payload.PullRequest.URL),
