@@ -40,7 +40,7 @@ func Run(notifier *notifier.Notifier) error {
 		}
 
 		go func() {
-			message := fmt.Sprintf("*👀 @%s, тебя приглашают на ревью*\n\n%s (by %s)", payload.Reviewer.Tag(), payload.PullRequest.TextWithLink(), payload.PullRequest.Author.Link())
+			message := fmt.Sprintf("*👀 %s, тебя приглашают на ревью*\n\n%s (by %s)", payload.Reviewer.Tag(), payload.PullRequest.TextWithLink(), payload.PullRequest.Author.Link())
 
 			if err := notifier.Send(context.Background(), message); err != nil {
 				log.Printf("Ошибка отправки уведомления о запросе на review: %s", err)
@@ -59,7 +59,7 @@ func Run(notifier *notifier.Notifier) error {
 		}
 
 		go func() {
-			message := fmt.Sprintf("%s *@%s, твои изменения одобрил(а)* %s\n\n%s", strings.Repeat("✅", payload.ApproveCount), payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
+			message := fmt.Sprintf("%s *%s, твои изменения одобрил(а)* %s\n\n%s", strings.Repeat("✅", payload.ApproveCountAsInt()), payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
 
 			if err := notifier.Send(context.Background(), message); err != nil {
 				log.Printf("Ошибка отправки уведомления о результате ревью (approve): %v", err)
@@ -78,7 +78,7 @@ func Run(notifier *notifier.Notifier) error {
 		}
 
 		go func() {
-			message := fmt.Sprintf("❌ *@%s, тебя просит внести изменения* %s\n\n%s", payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
+			message := fmt.Sprintf("❌ *%s, тебя просит внести изменения* %s\n\n%s", payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
 
 			if err := notifier.Send(context.Background(), message); err != nil {
 				http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о результате ревью (request-changes): %v", err), http.StatusInternalServerError)
@@ -98,7 +98,7 @@ func Run(notifier *notifier.Notifier) error {
 
 		if payload.PullRequest.Author != payload.Reviewer {
 			go func() {
-				message := fmt.Sprintf("*✍️ @%s, тебе оставил(а) комментарий* %s\n\n%s", payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
+				message := fmt.Sprintf("*✍️ %s, тебе оставил(а) комментарий* %s\n\n%s", payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
 
 				if err := notifier.Send(context.Background(), message); err != nil {
 					http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о результате ревью (comment): %v", err), http.StatusInternalServerError)
@@ -118,7 +118,7 @@ func Run(notifier *notifier.Notifier) error {
 		}
 
 		go func() {
-			message := fmt.Sprintf("*🤒 @%s, возникли ошибки во время прогона тестов на CI*\n\n%s", payload.Author.Tag(), payload.TextWithLink())
+			message := fmt.Sprintf("*🤒 %s, возникли ошибки во время прогона тестов на CI*\n\n%s", payload.Author.Tag(), payload.TextWithLink())
 
 			if err := notifier.Send(context.Background(), message); err != nil {
 				http.Error(w, fmt.Sprintf("Ошибка отправки уведомления о проваленных тестах: %v", err), http.StatusInternalServerError)
@@ -137,7 +137,7 @@ func Run(notifier *notifier.Notifier) error {
 		}
 
 		go func() {
-			message := fmt.Sprintf("*🤖 @%s, rubocop обнаружил проблемы в твоем коде*\n\n%s", payload.Author.Tag(), payload.TextWithLink())
+			message := fmt.Sprintf("*🤖 %s, rubocop обнаружил проблемы в твоем коде*\n\n%s", payload.Author.Tag(), payload.TextWithLink())
 
 			if err := notifier.Send(context.Background(), message); err != nil {
 				http.Error(w, fmt.Sprintf("Ошибка отправки уведомления об ошбках линтера: %v", err), http.StatusInternalServerError)
