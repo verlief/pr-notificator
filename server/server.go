@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"pull-request-notificator/notifier"
 	"pull-request-notificator/server/entities"
+	"strings"
 )
 
 func Run(notifier *notifier.Notifier) error {
@@ -58,7 +59,7 @@ func Run(notifier *notifier.Notifier) error {
 		}
 
 		go func() {
-			message := fmt.Sprintf("✅ *@%s, твои изменения одобрил(а)* %s\n\n%s", payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
+			message := fmt.Sprintf("%s *@%s, твои изменения одобрил(а)* %s\n\n%s", strings.Repeat("✅", payload.ApproveCount), payload.PullRequest.Author.Tag(), payload.Reviewer.Link(), payload.PullRequest.TextWithLink())
 
 			if err := notifier.Send(context.Background(), message); err != nil {
 				log.Printf("Ошибка отправки уведомления о результате ревью (approve): %v", err)
